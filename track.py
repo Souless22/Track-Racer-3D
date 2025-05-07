@@ -1,8 +1,10 @@
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
+from OpenGL.GLUT import GLUT_BITMAP_HELVETICA_18
 import math
 import random
+import time
 
 # Window setup
 WIN_W = 1000
@@ -12,22 +14,26 @@ FOV = 60
 # Game state
 game_over = False
 score = 0
+lives = 5
+camera_mode = "third"
+dash_offset = 0
+godmode = False
 
 # Car (player)
 LANE_WIDTH = 200
-LANES = [-LANE_WIDTH, 0, LANE_WIDTH]  # x positions for 3 lanes
-car_lane = 1  # start in center lane
-car_y = -300  # fixed y
-car_z = 50    # fixed z
+LANES = [-LANE_WIDTH, 0, LANE_WIDTH]
+car_lane = 1
+car_y = -300
+car_z = 50
 car_width = 60
 car_length = 100
 
 # Obstacles
 obstacles = []
-OBSTACLE_SPAWN_DIST = 1200
-OBSTACLE_SPEED = 15
+OBSTACLE_SPAWN_DIST = 2000
+OBSTACLE_SPEED = 6
 OBSTACLE_SIZE = 60
-OBSTACLE_SPAWN_INTERVAL = 50  # frames
+OBSTACLE_SPAWN_INTERVAL = 60
 
 # Camera
 def setupCamera():
@@ -36,14 +42,22 @@ def setupCamera():
     gluPerspective(FOV, float(WIN_W) / float(WIN_H), 0.1, 3000)
     glMatrixMode(GL_MODELVIEW)
     glLoadIdentity()
-    # Camera follows car from behind and above
-    eye_x = LANES[car_lane]
-    eye_y = car_y - 600
-    eye_z = 350
-    cen_x = LANES[car_lane]
-    cen_y = car_y + 300
-    cen_z = 0
-    gluLookAt(eye_x, eye_y, eye_z, cen_x, cen_y, cen_z, 0, 0, 1)
+    if camera_mode == "third":
+        eye_x = LANES[car_lane]
+        eye_y = car_y - 600
+        eye_z = 350
+        cen_x = LANES[car_lane]
+        cen_y = car_y + 300
+        cen_z = 0
+        gluLookAt(eye_x, eye_y, eye_z, cen_x, cen_y, cen_z, 0, 0, 1)
+    else:
+        eye_x = LANES[car_lane]
+        eye_y = car_y + 120
+        eye_z = car_z + 40
+        cen_x = LANES[car_lane]
+        cen_y = car_y + 400
+        cen_z = car_z + 40
+        gluLookAt(eye_x, eye_y, eye_z, cen_x, cen_y, cen_z, 0, 0, 1)
 
 def draw_text(x, y, text):
     glColor3f(1, 1, 1)
@@ -63,25 +77,94 @@ def draw_text(x, y, text):
     glMatrixMode(GL_MODELVIEW)
 
 def draw_game_floor():
-    # Draw lanes
+    glBegin(GL_QUADS)
+    glColor3f(0.1, 0.7, 0.2)
+    glVertex3f(-1000, -10000, 0)
+    glVertex3f(LANES[0] - LANE_WIDTH/2, -10000, 0)
+    glVertex3f(LANES[0] - LANE_WIDTH/2, 10000, 0)
+    glVertex3f(-1000, 10000, 0)
+    glEnd()
+
+    glBegin(GL_QUADS)
+    glColor3f(0.1, 0.7, 0.2)
+    glVertex3f(LANES[2] + LANE_WIDTH/2, -10000, 0)
+    glVertex3f(1000, -10000, 0)
+    glVertex3f(1000, 10000, 0)
+    glVertex3f(LANES[2] + LANE_WIDTH/2, 10000, 0)
+    glEnd()
+
     glBegin(GL_QUADS)
     for i in range(-1, 2):
-        if i == car_lane:
-            glColor3f(0.8, 0.8, 0.8)
-        else:
-            glColor3f(0.6, 0.6, 0.6)
+        glColor3f(0.6, 0.6, 0.6)
         glVertex3f(LANES[i+1] - LANE_WIDTH/2, -10000, 0)
         glVertex3f(LANES[i+1] + LANE_WIDTH/2, -10000, 0)
         glVertex3f(LANES[i+1] + LANE_WIDTH/2, 10000, 0)
         glVertex3f(LANES[i+1] - LANE_WIDTH/2, 10000, 0)
     glEnd()
 
+    glLineWidth(6)
+    glColor3f(1, 1, 1)
+    dash_length = 100
+    gap_length = 80
+    min_y = -10000
+    max_y = 10000
+    global dash_offset
+
+    for i in range(1, len(LANES)):
+        x = (LANES[i-1] + LANES[i]) / 2
+        y = min_y + (dash_offset % (dash_length + gap_length))
+        while y < max_y:
+            glBegin(GL_LINES)
+            glVertex3f(x, y, 1)
+            glVertex3f(x, min(y + dash_length, max_y), 1)
+            glEnd()
+            y += dash_length + gap_length
+
+    glColor3f(1, 1, 0)
+    left_edge_x = LANES[0] - LANE_WIDTH / 2
+    right_edge_x = LANES[2] + LANE_WIDTH / 2
+
+    glBegin(GL_LINES)
+    glVertex3f(left_edge_x, min_y, 2)
+    glVertex3f(left_edge_x, max_y, 2)
+    glEnd()
+
+    glBegin(GL_LINES)
+    glVertex3f(right_edge_x, min_y, 2)
+    glVertex3f(right_edge_x, max_y, 2)
+    glEnd()
+
 def draw_car():
     glPushMatrix()
     glTranslatef(LANES[car_lane], car_y, car_z)
+
+    glPushMatrix()
     glColor3f(0.8, 0.2, 0.2)
     glScalef(car_width, car_length, 40)
     glutSolidCube(1)
+    glPopMatrix()
+
+    glPushMatrix()
+    glColor3f(0.95, 0.95, 0.95)
+    glTranslatef(0, 0, 30)
+    glScalef(car_width * 0.6, car_length * 0.5, 20)
+    glutSolidCube(1)
+    glPopMatrix()
+
+    wheel_offset_x = car_width * 0.4
+    wheel_offset_y = car_length * 0.4
+    wheel_z = -20
+    wheel_size = 20
+
+    glColor3f(0.1, 0.1, 0.1)
+    for wx in [-wheel_offset_x, wheel_offset_x]:
+        for wy in [-wheel_offset_y, wheel_offset_y]:
+            glPushMatrix()
+            glTranslatef(wx, wy, wheel_z)
+            glScalef(wheel_size, wheel_size, wheel_size)
+            glutSolidCube(1)
+            glPopMatrix()
+
     glPopMatrix()
 
 def draw_obstacle(x, y, z):
@@ -100,36 +183,47 @@ def spawn_obstacle():
     obstacles.append([x, y, z, lane])
 
 def update_obstacles():
-    global obstacles, game_over, score
+    global obstacles, game_over, score, lives
     for obs in obstacles:
         obs[1] -= OBSTACLE_SPEED
-    # Remove obstacles that passed the car
     obstacles[:] = [obs for obs in obstacles if obs[1] > car_y - 400]
-    # Collision detection
-    for obs in obstacles:
-        if obs[3] == car_lane and abs(obs[1] - car_y) < (OBSTACLE_SIZE/2 + car_length/2):
-            game_over = True
-    # Score update: count obstacles passed
+
+    if not godmode:
+        for obs in obstacles:
+            if obs[3] == car_lane and abs(obs[1] - car_y) < (OBSTACLE_SIZE/2 + car_length/2):
+                obstacles.remove(obs)
+                lives -= 1
+                if lives <= 0 and not game_over:
+                    game_over = True
+                    print(f"GAME OVER! Final Score: {score}")
+                break
+
     for obs in obstacles:
         if not hasattr(obs, 'scored') and obs[1] < car_y:
             score += 1
             obs.append('scored')
 
 def reset_game():
-    global game_over, score, car_lane, obstacles
+    global game_over, score, car_lane, obstacles, lives
     game_over = False
     score = 0
     car_lane = 1
+    lives = 5
     obstacles.clear()
+    print("Game reset.")
 
 frame_count = 0
 def idle():
-    global frame_count
+    global frame_count, dash_offset
     if not game_over:
         update_obstacles()
         if frame_count % OBSTACLE_SPAWN_INTERVAL == 0:
             spawn_obstacle()
+        if frame_count % 60 == 0:
+            print(f"Score: {score}, Lives: {lives}")
         frame_count += 1
+        dash_offset += OBSTACLE_SPEED
+    time.sleep(0.01)
     glutPostRedisplay()
 
 def showScreen():
@@ -142,12 +236,15 @@ def showScreen():
     for obs in obstacles:
         draw_obstacle(obs[0], obs[1], obs[2])
     draw_text(10, WIN_H - 50, f"Score: {score}")
+    draw_text(10, WIN_H - 80, f"Lives: {lives}")
+    if godmode:
+        draw_text(10, WIN_H - 110, "GODMODE: ON")
     if game_over:
         draw_text(WIN_W//2 - 100, WIN_H//2, "GAME OVER! Press R to restart")
     glutSwapBuffers()
 
 def keyboardListener(key, x, y):
-    global car_lane
+    global car_lane, camera_mode, godmode
     if game_over:
         if key == b'r':
             reset_game()
@@ -158,12 +255,16 @@ def keyboardListener(key, x, y):
         car_lane += 1
     elif key == b'r':
         reset_game()
+    elif key == b'c' or key == b'C':
+        camera_mode = "first" if camera_mode == "third" else "third"
+    elif key == b'v' or key == b'V':
+        godmode = not godmode
 
 def specialKeyListener(key, x, y):
-    pass  # Not used
+    pass
 
 def mouseListener(button, state, x, y):
-    pass  # Not used
+    pass
 
 def main():
     glutInit()
@@ -180,4 +281,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
