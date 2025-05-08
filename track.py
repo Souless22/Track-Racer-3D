@@ -12,6 +12,7 @@ WIN_H = 800
 FOV = 60
 
 # Game state
+paused = False
 game_over = False
 score = 0
 lives = 5
@@ -215,7 +216,7 @@ def reset_game():
 frame_count = 0
 def idle():
     global frame_count, dash_offset
-    if not game_over:
+    if not game_over and not paused:
         update_obstacles()
         if frame_count % OBSTACLE_SPAWN_INTERVAL == 0:
             spawn_obstacle()
@@ -241,13 +242,19 @@ def showScreen():
         draw_text(10, WIN_H - 110, "GODMODE: ON")
     if game_over:
         draw_text(WIN_W//2 - 100, WIN_H//2, "GAME OVER! Press R to restart")
+    if paused:
+        draw_text(WIN_W//2 - 50, WIN_H//2, "PAUSED")
     glutSwapBuffers()
 
 def keyboardListener(key, x, y):
-    global car_lane, camera_mode, godmode
+    global car_lane, camera_mode, godmode, paused
     if game_over:
         if key == b'r':
             reset_game()
+        return
+    if key == b'p' or key == b'P':
+        paused = not paused
+        print("Paused" if paused else "Resumed")
         return
     if key == b'a' and car_lane > 0:
         car_lane -= 1
