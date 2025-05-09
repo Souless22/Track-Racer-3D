@@ -2,7 +2,6 @@ from OpenGL.GL import *
 from OpenGL.GLUT import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import GLUT_BITMAP_HELVETICA_18
-import math
 import random
 import time
 
@@ -12,6 +11,7 @@ WIN_H = 800
 FOV = 60
 
 # Game state
+difficult = "easy"
 paused = False
 game_over = False
 score = 0
@@ -19,6 +19,11 @@ lives = 5
 camera_mode = "third"
 dash_offset = 0
 godmode = False
+powerup_active = False
+powerup_timer = 0
+POWERUP_DURATION = 180  # 3 seconds at 60 FPS
+powerup_pos = None  # [x, y, z, lane]
+POWERUP_SIZE = 50
 
 # Car (player)
 LANE_WIDTH = 200
@@ -204,6 +209,23 @@ def update_obstacles():
             score += 1
             obs.append('scored')
 
+def set_difficulty(level):
+    global OBSTACLE_SPEED, OBSTACLE_SPAWN_INTERVAL
+    if level == "easy":
+        OBSTACLE_SPEED = 4
+        OBSTACLE_SPAWN_INTERVAL = 70
+    elif level == "medium":
+        OBSTACLE_SPEED = 6
+        OBSTACLE_SPAWN_INTERVAL = 60
+    elif level == "hard":
+        OBSTACLE_SPEED = 9
+        OBSTACLE_SPAWN_INTERVAL = 45
+    else:
+        OBSTACLE_SPEED = 4
+        OBSTACLE_SPAWN_INTERVAL = 70
+
+set_difficulty(difficult)
+
 def reset_game():
     global game_over, score, car_lane, obstacles, lives
     game_over = False
@@ -224,7 +246,6 @@ def idle():
             print(f"Score: {score}, Lives: {lives}")
         frame_count += 1
         dash_offset += OBSTACLE_SPEED
-    time.sleep(0.01)
     glutPostRedisplay()
 
 def showScreen():
@@ -238,6 +259,8 @@ def showScreen():
         draw_obstacle(obs[0], obs[1], obs[2])
     draw_text(10, WIN_H - 50, f"Score: {score}")
     draw_text(10, WIN_H - 80, f"Lives: {lives}")
+    if powerup_active:
+        draw_text(10, WIN_H - 110, "POWER-UP: Invincible & Speed!")
     if godmode:
         draw_text(10, WIN_H - 110, "GODMODE: ON")
     if game_over:
@@ -247,7 +270,7 @@ def showScreen():
     glutSwapBuffers()
 
 def keyboardListener(key, x, y):
-    global car_lane, camera_mode, godmode, paused
+    global car_lane, camera_mode, godmode, paused, difficult
     if game_over:
         if key == b'r':
             reset_game()
@@ -266,12 +289,21 @@ def keyboardListener(key, x, y):
         camera_mode = "first" if camera_mode == "third" else "third"
     elif key == b'v' or key == b'V':
         godmode = not godmode
-
-def specialKeyListener(key, x, y):
-    pass
-
-def mouseListener(button, state, x, y):
-    pass
+    if key == b'1':
+        difficulty = "easy"
+        set_difficulty(difficulty)
+        print("Difficulty set to EASY")
+        reset_game()
+    elif key == b'2':
+        difficulty = "medium"
+        set_difficulty(difficulty)
+        print("Difficulty set to MEDIUM")
+        reset_game()
+    elif key == b'3':
+        difficulty = "hard"
+        set_difficulty(difficulty)
+        print("Difficulty set to HARD")
+        reset_game()
 
 def main():
     glutInit()
@@ -282,8 +314,6 @@ def main():
     glutDisplayFunc(showScreen)
     glutIdleFunc(idle)
     glutKeyboardFunc(keyboardListener)
-    glutSpecialFunc(specialKeyListener)
-    glutMouseFunc(mouseListener)
     glutMainLoop()
 
 if __name__ == '__main__':
